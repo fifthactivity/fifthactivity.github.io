@@ -57,6 +57,8 @@ class GameCoordinator {
     this.scale = this.determineScale(1);
     this.scaledTileSize = this.tileSize * this.scale;
     this.firstGame = true;
+    this.remotePacman = null;
+    this.localPlayerSlot = 0;
 
     this.movementKeys = {
       // WASD
@@ -414,6 +416,11 @@ class GameCoordinator {
     this.cutscene = true;
     this.highScore = localStorage.getItem('highScore');
 
+    const isMultiplayerActive = window.multiplayer?.playingMultiplayer;
+    this.localPlayerSlot = isMultiplayerActive
+      ? (window.multiplayer.isHost ? 0 : 1)
+      : 0;
+
     if (this.firstGame) {
       setInterval(() => {
         this.collisionDetectionLoop();
@@ -424,10 +431,22 @@ class GameCoordinator {
         this.mazeArray,
         new CharacterUtil(this.scaledTileSize),
       );
+      if (isMultiplayerActive) {
+        this.pacman.remote = !window.multiplayer.isHost;
+        this.remotePacman = new Pacman(
+          this.scaledTileSize,
+          this.mazeArray,
+          new CharacterUtil(this.scaledTileSize),
+          'pacman-2',
+          'pacman-arrow-2',
+        );
+        this.remotePacman.remote = window.multiplayer.isHost ? false : true;
+      }
+
       this.blinky = new Ghost(
         this.scaledTileSize,
         this.mazeArray,
-        this.pacman,
+        isMultiplayerActive ? [this.pacman, this.remotePacman].filter(Boolean) : this.pacman,
         'blinky',
         this.level,
         new CharacterUtil(this.scaledTileSize),
@@ -435,7 +454,7 @@ class GameCoordinator {
       this.pinky = new Ghost(
         this.scaledTileSize,
         this.mazeArray,
-        this.pacman,
+        isMultiplayerActive ? [this.pacman, this.remotePacman].filter(Boolean) : this.pacman,
         'pinky',
         this.level,
         new CharacterUtil(this.scaledTileSize),
@@ -443,7 +462,7 @@ class GameCoordinator {
       this.inky = new Ghost(
         this.scaledTileSize,
         this.mazeArray,
-        this.pacman,
+        isMultiplayerActive ? [this.pacman, this.remotePacman].filter(Boolean) : this.pacman,
         'inky',
         this.level,
         new CharacterUtil(this.scaledTileSize),
@@ -452,11 +471,16 @@ class GameCoordinator {
       this.clyde = new Ghost(
         this.scaledTileSize,
         this.mazeArray,
-        this.pacman,
+        isMultiplayerActive ? [this.pacman, this.remotePacman].filter(Boolean) : this.pacman,
         'clyde',
         this.level,
         new CharacterUtil(this.scaledTileSize),
       );
+      if (isMultiplayerActive && !window.multiplayer.isHost) {
+        [this.blinky, this.pinky, this.inky, this.clyde].forEach((ghost) => {
+          if (ghost) ghost.remote = true;
+        });
+      }
       this.fruit = new Pickup(
         'fruit',
         this.scaledTileSize,
@@ -470,12 +494,15 @@ class GameCoordinator {
 
     this.entityList = [
       this.pacman,
+    ];
+    if (this.remotePacman) this.entityList.push(this.remotePacman);
+    this.entityList.push(
       this.blinky,
       this.pinky,
       this.inky,
       this.clyde,
       this.fruit,
-    ];
+    );
 
     this.ghosts = [this.blinky, this.pinky, this.inky, this.clyde];
 
@@ -488,6 +515,9 @@ class GameCoordinator {
       this.setUiDimensions();
     } else {
       this.pacman.reset();
+      if (this.remotePacman) {
+        this.remotePacman.reset();
+      }
       this.ghosts.forEach((ghost) => {
         ghost.reset(true);
       });
@@ -618,6 +648,9 @@ class GameCoordinator {
 
       this.allowPacmanMovement = true;
       this.pacman.moving = true;
+      if (this.remotePacman && !this.remotePacman.remote) {
+        this.remotePacman.moving = true;
+      }
 
       this.ghosts.forEach((ghost) => {
         const ghostRef = ghost;
@@ -721,6 +754,7 @@ class GameCoordinator {
     window.addEventListener('addTimer', this.addTimer.bind(this));
     window.addEventListener('removeTimer', this.removeTimer.bind(this));
     window.addEventListener('releaseGhost', this.releaseGhost.bind(this));
+    window.addEventListener('multiplayer:state', this.handleMultiplayerState.bind(this));
   }
 
   /**
@@ -765,12 +799,70 @@ class GameCoordinator {
   }
 
   /**
+   * Applies the latest multiplayer state update to the local game objects
+   * @param {Event} event
+   */
+  handleMultiplayerState(event) {
+    const { detail } = event;
+    if (!detail || !Array.isArray(detail.playerStates)) return;
+
+    detail.playerStates.forEach((playerState) => {
+      const player = playerState.slot === this.localPlayerSlot
+        ? this.pacman
+        : this.remotePacman;
+      if (!player) return;
+
+      player.oldPosition = { ...player.position };
+      player.position = { top: playerState.top, left: playerState.left };
+      player.direction = playerState.direction;
+      player.moving = playerState.moving;
+      player.setSpriteSheet(player.direction);
+    });
+
+    if (Array.isArray(detail.ghostStates)) {
+      detail.ghostStates.forEach((ghostState) => {
+        const ghost = this.ghosts.find((g) => g.name === ghostState.name);
+        if (!ghost) return;
+
+        ghost.oldPosition = { ...ghost.position };
+        ghost.position = { top: ghostState.top, left: ghostState.left };
+        ghost.direction = ghostState.direction;
+        ghost.mode = ghostState.mode;
+        ghost.moving = ghostState.moving;
+        ghost.setSpriteSheet(ghost.name, ghost.direction, ghost.mode);
+      });
+    }
+  }
+
+  /**
+   * Applies remote player input for an authoritative multiplayer host
+   * @param {Object} data
+   */
+  applyRemotePlayerInput(data) {
+    if (!data || typeof data.slot !== 'number' || !data.direction) return;
+    const remotePlayer = data.slot === this.localPlayerSlot ? this.pacman : this.remotePacman;
+    if (!remotePlayer) return;
+
+    remotePlayer.changeDirection(data.direction, true);
+  }
+
+  /**
    * Calls Pacman's changeDirection event if certain conditions are met
    * @param {({'up'|'down'|'left'|'right'})} direction
    */
   changeDirection(direction) {
     if (this.allowKeyPresses && this.gameEngine.running) {
-      this.pacman.changeDirection(direction, this.allowPacmanMovement);
+      const multiplayer = window.multiplayer;
+      if (multiplayer?.playingMultiplayer && !multiplayer.isHost) {
+        multiplayer.sendPlayerInput({
+          slot: this.localPlayerSlot,
+          direction,
+        });
+        this.pacman.pacmanArrow.style.backgroundImage = 'url(app/style/graphics/'
+          + `spriteSheets/characters/pacman/arrow_${direction}.svg)`;
+      } else {
+        this.pacman.changeDirection(direction, this.allowPacmanMovement);
+      }
     }
   }
 

@@ -71,6 +71,8 @@
           <div id='dot-container'></div>
           <p id='pacman' class='pacman'></p>
           <p id='pacman-arrow' class='pacman'></p>
+          <p id='pacman-2' class='pacman'></p>
+          <p id='pacman-arrow-2' class='pacman'></p>
           <p id='clyde' class='ghost'></p>
           <p id='inky' class='ghost'></p>
           <p id='pinky' class='ghost'></p>
@@ -128,7 +130,7 @@
         window.onload = () => {
           // Initialize game coordinator and multiplayer manager
           window.multiplayer = new MultiplayerManager();
-          let gameCoordinator = new GameCoordinator();
+          window.gameCoordinator = new GameCoordinator();
         }
       </script>
     </div>

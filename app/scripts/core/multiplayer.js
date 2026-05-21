@@ -1,4 +1,4 @@
-class MultiplayerManager {
+          class MultiplayerManager {
   constructor() {
     this.peer = null;
     this.connections = {};
@@ -7,6 +7,8 @@ class MultiplayerManager {
     this.roomId = null;
     this.isHost = false;
     this.playerName = null;
+    this.playingMultiplayer = false;
+    this.gameStateInterval = null;
 
     this.hostRoomIdDisplay = document.getElementById('host-room-code');
     this.joinRoomIdDisplay = document.getElementById('join-room-code');
@@ -114,6 +116,7 @@ class MultiplayerManager {
 
     this.playerName = name;
     this.isHost = true;
+    this.playingMultiplayer = true;
     this.createPeer(this.generateRoomId());
   }
 
@@ -125,6 +128,7 @@ class MultiplayerManager {
 
     this.playerName = name;
     this.isHost = false;
+    this.playingMultiplayer = true;
     this.createPeer();
 
     const conn = this.peer.connect(roomId);
@@ -230,9 +234,58 @@ class MultiplayerManager {
     });
   }
 
+  broadcastGameState() {
+    if (!this.isHost || !this.roomId || !window.gameCoordinator) return;
+
+    const players = [window.gameCoordinator.pacman];
+    if (window.gameCoordinator.remotePacman) {
+      players.push(window.gameCoordinator.remotePacman);
+    }
+
+    const playerStates = players.map((player, slot) => ({
+      slot,
+      top: player.position.top,
+      left: player.position.left,
+      direction: player.direction,
+      moving: player.moving,
+    }));
+
+    const ghostStates = window.gameCoordinator.ghosts.map((ghost) => ({
+      name: ghost.name,
+      top: ghost.position.top,
+      left: ghost.position.left,
+      direction: ghost.direction,
+      mode: ghost.mode,
+      moving: ghost.moving,
+    }));
+
+    this.broadcast({
+      type: 'game_state',
+      playerStates,
+      ghostStates,
+    });
+  }
+
+  startGameStateBroadcast() {
+    if (this.gameStateInterval) return;
+    this.gameStateInterval = setInterval(() => {
+      this.broadcastGameState();
+    }, 100);
+  }
+
+  sendPlayerInput(input) {
+    Object.values(this.connections).forEach((conn) => {
+      if (conn.open) conn.send({ type: 'player_input', ...input });
+    });
+  }
+
   startGame() {
     // For now, emit a start message to connected peers
     this.broadcast({ type: 'start_game' });
+    if (this.isHost) {
+      this.broadcastGameState();
+      this.startGameStateBroadcast();
+    }
     // Host can also trigger UI changes; gameCoordinator should listen for this as needed
     window.dispatchEvent(new CustomEvent('multiplayer:start', { detail: {} }));
   }

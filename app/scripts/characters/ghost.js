@@ -2,12 +2,13 @@ class Ghost {
   constructor(scaledTileSize, mazeArray, pacman, name, level, characterUtil, blinky) {
     this.scaledTileSize = scaledTileSize;
     this.mazeArray = mazeArray;
-    this.pacman = pacman;
+    this.pacmen = Array.isArray(pacman) ? pacman : [pacman];
     this.name = name;
     this.level = level;
     this.characterUtil = characterUtil;
     this.blinky = blinky;
     this.animationTarget = document.getElementById(name);
+    this.remote = false;
 
     this.reset();
   }
@@ -23,7 +24,7 @@ class Ghost {
     }
 
     this.setDefaultMode();
-    this.setMovementStats(this.pacman, this.name, this.level);
+    this.setMovementStats(this.pacmen[0], this.name, this.level);
     this.setSpriteAnimationStats();
     this.setStyleMeasurements(this.scaledTileSize, this.spriteFrames);
     this.setDefaultPosition(this.scaledTileSize, this.name);
@@ -275,9 +276,17 @@ class Ghost {
    * @param {({x: number, y: number})} pacmanGridPosition
    * @param {number} spaces
    */
-  getPositionInFrontOfPacman(pacmanGridPosition, spaces) {
+  getClosestPacman(gridPosition) {
+    return this.pacmen.reduce((closest, pacman) => {
+      const currentDistance = this.calculateDistance(gridPosition, this.characterUtil.determineGridPosition(pacman.position, this.scaledTileSize));
+      const closestDistance = closest ? this.calculateDistance(gridPosition, this.characterUtil.determineGridPosition(closest.position, this.scaledTileSize)) : Infinity;
+      return currentDistance < closestDistance ? pacman : closest;
+    }, null);
+  }
+
+  getPositionInFrontOfPacman(pacmanGridPosition, spaces, pacman) {
     const target = { ...pacmanGridPosition };
-    const pacDirection = this.pacman.direction;
+    const pacDirection = pacman.direction;
     const propToChange = (pacDirection === 'up' || pacDirection === 'down')
       ? 'y' : 'x';
     const tileOffset = (pacDirection === 'up' || pacDirection === 'left')
@@ -292,8 +301,8 @@ class Ghost {
    * @param {({x: number, y: number})} pacmanGridPosition
    * @returns {({x: number, y: number})}
    */
-  determinePinkyTarget(pacmanGridPosition) {
-    return this.getPositionInFrontOfPacman(pacmanGridPosition, 4);
+  determinePinkyTarget(pacmanGridPosition, pacman) {
+    return this.getPositionInFrontOfPacman(pacmanGridPosition, 4, pacman);
   }
 
   /**
@@ -303,9 +312,9 @@ class Ghost {
    * @param {({x: number, y: number})} pacmanGridPosition
    * @returns {({x: number, y: number})}
    */
-  determineInkyTarget(pacmanGridPosition) {
+  determineInkyTarget(pacmanGridPosition, pacman) {
     const blinkyGridPosition = this.characterUtil.determineGridPosition(this.blinky.position, this.scaledTileSize);
-    const pivotPoint = this.getPositionInFrontOfPacman(pacmanGridPosition, 2);
+    const pivotPoint = this.getPositionInFrontOfPacman(pacmanGridPosition, 2, pacman);
     return {
       x: pivotPoint.x + (pivotPoint.x - blinkyGridPosition.x),
       y: pivotPoint.y + (pivotPoint.y - blinkyGridPosition.y),
@@ -338,9 +347,14 @@ class Ghost {
       return { x: 13.5, y: 10 };
     }
 
+    const targetPacman = this.getClosestPacman(gridPosition);
+    const targetPacmanGridPosition = targetPacman
+      ? this.characterUtil.determineGridPosition(targetPacman.position, this.scaledTileSize)
+      : pacmanGridPosition;
+
     // Ghosts run from Pacman if scared
     if (mode === 'scared') {
-      return pacmanGridPosition;
+      return targetPacmanGridPosition;
     }
 
     // Ghosts seek out corners in Scatter mode
@@ -348,7 +362,7 @@ class Ghost {
       switch (name) {
         case 'blinky':
           // Blinky will chase Pacman, even in Scatter mode, if he's in Cruise Elroy form
-          return (this.cruiseElroy ? pacmanGridPosition : { x: 27, y: 0 });
+          return (this.cruiseElroy ? targetPacmanGridPosition : { x: 27, y: 0 });
         case 'pinky':
           return { x: 0, y: 0 };
         case 'inky':
@@ -363,13 +377,13 @@ class Ghost {
     switch (name) {
       // Blinky goes after Pacman's position
       case 'blinky':
-        return pacmanGridPosition;
+        return targetPacmanGridPosition;
       case 'pinky':
-        return this.determinePinkyTarget(pacmanGridPosition);
+        return this.determinePinkyTarget(targetPacmanGridPosition, targetPacman);
       case 'inky':
-        return this.determineInkyTarget(pacmanGridPosition);
+        return this.determineInkyTarget(targetPacmanGridPosition, targetPacman);
       case 'clyde':
-        return this.determineClydeTarget(gridPosition, pacmanGridPosition);
+        return this.determineClydeTarget(gridPosition, targetPacmanGridPosition);
       default:
         // TODO: Other ghosts
         return pacmanGridPosition;
@@ -606,7 +620,10 @@ class Ghost {
     let newPosition;
 
     const gridPosition = this.characterUtil.determineGridPosition(this.position, this.scaledTileSize);
-    const pacmanGridPosition = this.characterUtil.determineGridPosition(this.pacman.position, this.scaledTileSize);
+    const targetPacman = this.getClosestPacman(gridPosition);
+    const pacmanGridPosition = targetPacman
+      ? this.characterUtil.determineGridPosition(targetPacman.position, this.scaledTileSize)
+      : { x: 0, y: 0 };
     const velocity = this.determineVelocity(gridPosition, this.mode);
 
     if (this.idleMode) {
@@ -787,6 +804,8 @@ class Ghost {
    * @param {number} elapsedMs - The amount of MS that have passed since the last update
    */
   update(elapsedMs) {
+    if (this.remote) return;
+
     this.oldPosition = { ...this.position };
 
     if (this.moving) {

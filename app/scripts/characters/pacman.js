@@ -1,10 +1,11 @@
 class Pacman {
-  constructor(scaledTileSize, mazeArray, characterUtil) {
+  constructor(scaledTileSize, mazeArray, characterUtil, animationTargetId = 'pacman', arrowTargetId = 'pacman-arrow') {
     this.scaledTileSize = scaledTileSize;
     this.mazeArray = mazeArray;
     this.characterUtil = characterUtil;
-    this.animationTarget = document.getElementById('pacman');
-    this.pacmanArrow = document.getElementById('pacman-arrow');
+    this.animationTarget = document.getElementById(animationTargetId);
+    this.pacmanArrow = document.getElementById(arrowTargetId);
+    this.remote = false;
 
     this.reset();
   }
@@ -233,6 +234,8 @@ class Pacman {
    * @param {number} elapsedMs - The amount of MS that have passed since the last update
    */
   update(elapsedMs) {
+    if (this.remote) return;
+
     this.oldPosition = { ...this.position };
 
     if (this.moving) {
