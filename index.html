@@ -18,19 +18,28 @@
       <div id='main-menu-container' class='main-menu-container'>
         <img id='logo' class='logo' src='app/style/graphics/pacman_logo.png' alt='Pacman Logo'>
 
-        <div id='lobby' class='lobby'>
-          <div class='lobby-controls'>
-            <button id='host-room' class='game-start'>Host Room</button>
-            <div class='join-row'>
-              <input id='join-room-id' placeholder='Room ID' />
-              <button id='join-room' class='game-start'>Join Room</button>
-            </div>
+        <div id='menu-actions' class='menu-actions'>
+          <button id='host-menu' class='game-start'>Host</button>
+          <button id='join-menu' class='game-start'>Join</button>
+        </div>
+
+        <div id='join-panel' class='menu-panel hidden'>
+          <input id='join-name' placeholder='Your Name' />
+          <div class='join-row'>
+            <input id='join-room-id' placeholder='Room Code' />
+            <button id='join-action' class='game-start'>Join Room</button>
+          </div>
+        </div>
+
+        <div id='host-panel' class='menu-panel hidden'>
+          <div id='host-setup' class='host-setup'>
+            <input id='host-name' placeholder='Your Name' />
+            <button id='host-action' class='game-start'>Create Room</button>
           </div>
 
-          <div id='lobby-info' class='lobby-info'>
-            <div>Peer ID: <span id='peer-id'>-</span></div>
-            <div>Room ID: <span id='room-id'>-</span></div>
-            <div>Players (<span id='player-count'>0</span>/4):</div>
+          <div id='host-lobby' class='host-lobby hidden'>
+            <div class='host-code'>Room Code: <span id='room-id'>-</span></div>
+            <div class='host-players'>Players (<span id='player-count'>0</span>/4):</div>
             <ul id='player-list'></ul>
             <button id='game-start' class='game-start' disabled>Start Game</button>
           </div>
