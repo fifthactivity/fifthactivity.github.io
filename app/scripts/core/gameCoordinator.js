@@ -867,6 +867,7 @@ class GameCoordinator {
     if (this.allowKeyPresses && this.gameEngine.running) {
       const multiplayer = window.multiplayer;
       if (multiplayer?.playingMultiplayer && !multiplayer.isHost) {
+        this.pacman.changeDirection(direction, this.allowPacmanMovement);
         multiplayer.sendPlayerInput({
           slot: this.localPlayerSlot,
           direction,

@@ -60,8 +60,10 @@ class GameEngine {
    */
   update(elapsedMs, entityList) {
     if (window.multiplayer?.playingMultiplayer && !window.multiplayer.isHost) {
+      const localPlayer = window.gameCoordinator?.pacman;
       entityList.forEach((entity) => {
-        if (typeof entity.update === 'function' && entity.remote) {
+        if (typeof entity.update === 'function'
+          && (entity.remote || entity === localPlayer)) {
           entity.update(elapsedMs);
         }
       });

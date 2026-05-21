@@ -1882,6 +1882,7 @@ class GameCoordinator {
     if (this.allowKeyPresses && this.gameEngine.running) {
       const multiplayer = window.multiplayer;
       if (multiplayer?.playingMultiplayer && !multiplayer.isHost) {
+        this.pacman.changeDirection(direction, this.allowPacmanMovement);
         multiplayer.sendPlayerInput({
           slot: this.localPlayerSlot,
           direction,
@@ -2537,8 +2538,10 @@ class GameEngine {
    */
   update(elapsedMs, entityList) {
     if (window.multiplayer?.playingMultiplayer && !window.multiplayer.isHost) {
+      const localPlayer = window.gameCoordinator?.pacman;
       entityList.forEach((entity) => {
-        if (typeof entity.update === 'function' && entity.remote) {
+        if (typeof entity.update === 'function'
+          && (entity.remote || entity === localPlayer)) {
           entity.update(elapsedMs);
         }
       });
