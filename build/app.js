@@ -1151,17 +1151,24 @@ class GameCoordinator {
       this.mazeArray[rowIndex] = row[0].split('');
     });
 
-    this.gameStartButton.addEventListener(
-      'click',
-      this.startButtonClick.bind(this),
-    );
-    this.pauseButton.addEventListener('click', this.handlePauseKey.bind(this));
-    this.soundButton.addEventListener(
-      'click',
-      this.soundButtonClick.bind(this),
-    );
+    if (this.gameStartButton) {
+      this.gameStartButton.addEventListener(
+        'click',
+        this.startButtonClick.bind(this),
+      );
+    }
+    if (this.pauseButton) {
+      this.pauseButton.addEventListener('click', this.handlePauseKey.bind(this));
+    }
+    if (this.soundButton) {
+      this.soundButton.addEventListener(
+        'click',
+        this.soundButtonClick.bind(this),
+      );
+    }
 
     this.preloadAssets();
+    window.addEventListener('multiplayer:start', this.startButtonClick.bind(this));
   }
 
   /**
@@ -1230,7 +1237,9 @@ class GameCoordinator {
    * Sets the icon for the sound button
    */
   setSoundButtonIcon(newVolume) {
-    this.soundButton.innerHTML = newVolume === 0 ? 'volume_off' : 'volume_up';
+    if (this.soundButton) {
+      this.soundButton.innerHTML = newVolume === 0 ? 'volume_off' : 'volume_up';
+    }
   }
 
   /**
@@ -1609,7 +1618,7 @@ class GameCoordinator {
 
   setUiDimensions() {
     this.gameUi.style.fontSize = `${this.scaledTileSize}px`;
-    this.rowTop.style.marginBottom = `${this.scaledTileSize}px`;
+    if (this.rowTop) this.rowTop.style.marginBottom = `${this.scaledTileSize}px`;
   }
 
   /**
@@ -1863,8 +1872,8 @@ class GameCoordinator {
       if (this.gameEngine.started) {
         this.soundManager.resumeAmbience();
         this.gameUi.style.filter = 'unset';
-        this.pausedText.style.visibility = 'hidden';
-        this.pauseButton.innerHTML = 'pause';
+        if (this.pausedText) this.pausedText.style.visibility = 'hidden';
+        if (this.pauseButton) this.pauseButton.innerHTML = 'pause';
         this.activeTimers.forEach((timer) => {
           timer.resume();
         });
@@ -1872,8 +1881,8 @@ class GameCoordinator {
         this.soundManager.stopAmbience();
         this.soundManager.setAmbience('pause_beat', true);
         this.gameUi.style.filter = 'blur(5px)';
-        this.pausedText.style.visibility = 'visible';
-        this.pauseButton.innerHTML = 'play_arrow';
+        if (this.pausedText) this.pausedText.style.visibility = 'visible';
+        if (this.pauseButton) this.pauseButton.innerHTML = 'play_arrow';
         this.activeTimers.forEach((timer) => {
           timer.pause();
         });

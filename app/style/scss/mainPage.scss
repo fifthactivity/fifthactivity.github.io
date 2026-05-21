@@ -148,6 +148,29 @@ body {
   }
 }
 
+/* Corner score displays */
+.score-top-left, .score-top-right {
+  position: absolute;
+  top: 8px;
+  z-index: 3;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.score-top-left {
+  left: 8px;
+  text-align: left;
+}
+
+.score-top-right {
+  right: 8px;
+  text-align: right;
+  align-items: flex-end;
+}
+
 .loading-cover {
   background: $yellow;
   height: 100vh;

@@ -5,7 +5,7 @@
 
     <link href='build/app.css' rel='stylesheet'>
     <script src='build/app.js'></script>
-    <link rel='shortcut icon' type='image/x-icon' href='favicon.ico'>
+    <!-- favicon removed (was not loading reliably) -->
     <link href='https://fonts.googleapis.com/css?family=Press+Start+2P&display=swap' rel='stylesheet'>
     <link href='https://fonts.googleapis.com/icon?family=Material+Icons'
       rel='stylesheet'>
@@ -19,38 +19,35 @@
 
       <div id='main-menu-container' class='main-menu-container'>
         <img id='logo' class='logo' src='app/style/graphics/pacman_logo.png' alt='Pacman Logo'>
-        <button id='game-start' class='game-start'>
-          PLAY
-        </button>
-      </div>
 
-      <div class='header-buttons'>
-        <span>
-          <button>
-            <i id='pause-button' class='material-icons'>
-              pause
-            </i>
-          </button>
-          <button>
-            <i id='sound-button' class='material-icons'></i>
-          </button>
-        </span>
-      </div>
+        <div id='lobby' class='lobby'>
+          <div class='lobby-controls'>
+            <button id='host-room' class='game-start'>Host Room</button>
+            <div class='join-row'>
+              <input id='join-room-id' placeholder='Room ID' />
+              <button id='join-room' class='game-start'>Join Room</button>
+            </div>
+          </div>
 
-      <div id='paused-text' class='paused-text'>
-        PAUSED
+          <div id='lobby-info' class='lobby-info'>
+            <div>Peer ID: <span id='peer-id'>-</span></div>
+            <div>Room ID: <span id='room-id'>-</span></div>
+            <div>Players (<span id='player-count'>0</span>/4):</div>
+            <ul id='player-list'></ul>
+            <button id='game-start' class='game-start' disabled>Start Game</button>
+          </div>
+        </div>
       </div>
 
       <div id='game-ui' class='game-ui'>
-        <div id='row-top' class='row top'>
-          <div class='column _25'>
-            <div class='one-up'>1UP</div>
-            <div id='points-display'></div>
-          </div>
-          <div class='column _50'>
-            <div>HIGH SCORE</div>
-            <div id='high-score-display'></div>
-          </div>
+        <div id='top-left' class='score-top-left'>
+          <div class='one-up'>1UP</div>
+          <div id='points-display'></div>
+        </div>
+
+        <div id='top-right' class='score-top-right'>
+          <div>HIGH SCORE</div>
+          <div id='high-score-display'></div>
         </div>
 
         <div id='maze' class='maze'>
@@ -110,8 +107,12 @@
         </div>
       </div>
 
+      <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+      <script src="app/scripts/core/multiplayer.js"></script>
       <script>
         window.onload = () => {
+          // Initialize game coordinator and multiplayer manager
+          window.multiplayer = new MultiplayerManager();
           let gameCoordinator = new GameCoordinator();
         }
       </script>
