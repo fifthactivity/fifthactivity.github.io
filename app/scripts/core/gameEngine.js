@@ -59,6 +59,15 @@ class GameEngine {
    * @param {Array} entityList - List of entities to be used throughout the game
    */
   update(elapsedMs, entityList) {
+    if (window.multiplayer?.playingMultiplayer && !window.multiplayer.isHost) {
+      entityList.forEach((entity) => {
+        if (typeof entity.update === 'function' && entity.remote) {
+          entity.update(elapsedMs);
+        }
+      });
+      return;
+    }
+
     entityList.forEach((entity) => {
       if (typeof entity.update === 'function') {
         entity.update(elapsedMs);

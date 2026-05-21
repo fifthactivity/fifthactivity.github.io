@@ -417,36 +417,58 @@ class GameCoordinator {
     this.highScore = localStorage.getItem('highScore');
 
     const isMultiplayerActive = window.multiplayer?.playingMultiplayer;
-    this.localPlayerSlot = isMultiplayerActive
-      ? (window.multiplayer.isHost ? 0 : 1)
-      : 0;
+    this.localPlayerSlot = 0;
+    if (isMultiplayerActive && window.multiplayer?.playerSlots) {
+      const mappedSlot = window.multiplayer.playerSlots[window.multiplayer.peerId];
+      if (typeof mappedSlot === 'number') {
+        this.localPlayerSlot = mappedSlot;
+      } else {
+        this.localPlayerSlot = window.multiplayer.isHost ? 0 : 1;
+      }
+    } else if (isMultiplayerActive) {
+      this.localPlayerSlot = window.multiplayer.isHost ? 0 : 1;
+    }
 
     if (this.firstGame) {
       setInterval(() => {
         this.collisionDetectionLoop();
       }, 500);
 
-      this.pacman = new Pacman(
-        this.scaledTileSize,
-        this.mazeArray,
-        new CharacterUtil(this.scaledTileSize),
-      );
-      if (isMultiplayerActive) {
-        this.pacman.remote = !window.multiplayer.isHost;
-        this.remotePacman = new Pacman(
+      this.players = [];
+      const playerIds = ['pacman', 'pacman-2', 'pacman-3', 'pacman-4'];
+      const arrowIds = ['pacman-arrow', 'pacman-arrow-2', 'pacman-arrow-3', 'pacman-arrow-4'];
+
+      playerIds.forEach((playerId, slot) => {
+        const player = new Pacman(
           this.scaledTileSize,
           this.mazeArray,
           new CharacterUtil(this.scaledTileSize),
-          'pacman-2',
-          'pacman-arrow-2',
+          playerId,
+          arrowIds[slot],
         );
-        this.remotePacman.remote = window.multiplayer.isHost ? false : true;
+        player.remote = true;
+        player.display = false;
+        this.players.push(player);
+      });
+
+      if (!isMultiplayerActive) {
+        this.players = [this.players[0]];
+      }
+
+      this.pacman = this.players[this.localPlayerSlot];
+      this.pacman.remote = false;
+      this.pacman.display = true;
+      if (isMultiplayerActive) {
+        this.players.forEach((player, slot) => {
+          player.display = true;
+          player.remote = slot !== this.localPlayerSlot;
+        });
       }
 
       this.blinky = new Ghost(
         this.scaledTileSize,
         this.mazeArray,
-        isMultiplayerActive ? [this.pacman, this.remotePacman].filter(Boolean) : this.pacman,
+        isMultiplayerActive ? this.players : this.pacman,
         'blinky',
         this.level,
         new CharacterUtil(this.scaledTileSize),
@@ -454,7 +476,7 @@ class GameCoordinator {
       this.pinky = new Ghost(
         this.scaledTileSize,
         this.mazeArray,
-        isMultiplayerActive ? [this.pacman, this.remotePacman].filter(Boolean) : this.pacman,
+        isMultiplayerActive ? this.players : this.pacman,
         'pinky',
         this.level,
         new CharacterUtil(this.scaledTileSize),
@@ -462,7 +484,7 @@ class GameCoordinator {
       this.inky = new Ghost(
         this.scaledTileSize,
         this.mazeArray,
-        isMultiplayerActive ? [this.pacman, this.remotePacman].filter(Boolean) : this.pacman,
+        isMultiplayerActive ? this.players : this.pacman,
         'inky',
         this.level,
         new CharacterUtil(this.scaledTileSize),
@@ -471,7 +493,7 @@ class GameCoordinator {
       this.clyde = new Ghost(
         this.scaledTileSize,
         this.mazeArray,
-        isMultiplayerActive ? [this.pacman, this.remotePacman].filter(Boolean) : this.pacman,
+        isMultiplayerActive ? this.players : this.pacman,
         'clyde',
         this.level,
         new CharacterUtil(this.scaledTileSize),
@@ -492,10 +514,7 @@ class GameCoordinator {
       );
     }
 
-    this.entityList = [
-      this.pacman,
-    ];
-    if (this.remotePacman) this.entityList.push(this.remotePacman);
+    this.entityList = isMultiplayerActive ? [...this.players] : [this.pacman];
     this.entityList.push(
       this.blinky,
       this.pinky,
@@ -514,10 +533,9 @@ class GameCoordinator {
       this.soundManager = new SoundManager();
       this.setUiDimensions();
     } else {
-      this.pacman.reset();
-      if (this.remotePacman) {
-        this.remotePacman.reset();
-      }
+      this.players?.forEach((player) => {
+        if (player) player.reset();
+      });
       this.ghosts.forEach((ghost) => {
         ghost.reset(true);
       });
@@ -648,9 +666,6 @@ class GameCoordinator {
 
       this.allowPacmanMovement = true;
       this.pacman.moving = true;
-      if (this.remotePacman && !this.remotePacman.remote) {
-        this.remotePacman.moving = true;
-      }
 
       this.ghosts.forEach((ghost) => {
         const ghostRef = ghost;
@@ -807,9 +822,7 @@ class GameCoordinator {
     if (!detail || !Array.isArray(detail.playerStates)) return;
 
     detail.playerStates.forEach((playerState) => {
-      const player = playerState.slot === this.localPlayerSlot
-        ? this.pacman
-        : this.remotePacman;
+      const player = this.players?.[playerState.slot];
       if (!player) return;
 
       player.oldPosition = { ...player.position };
@@ -840,7 +853,7 @@ class GameCoordinator {
    */
   applyRemotePlayerInput(data) {
     if (!data || typeof data.slot !== 'number' || !data.direction) return;
-    const remotePlayer = data.slot === this.localPlayerSlot ? this.pacman : this.remotePacman;
+    const remotePlayer = this.players?.[data.slot];
     if (!remotePlayer) return;
 
     remotePlayer.changeDirection(data.direction, true);

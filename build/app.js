@@ -787,6 +787,14 @@ class Ghost {
    * @param {number} elapsedMs - The amount of MS that have passed since the last update
    */
   update(elapsedMs) {
+    if (this.remote) {
+      this.oldPosition = { ...this.position };
+      if (this.moving) {
+        this.msSinceLastSprite += elapsedMs;
+      }
+      return;
+    }
+
     this.oldPosition = { ...this.position };
 
     if (this.moving) {
@@ -799,12 +807,13 @@ class Ghost {
 
 
 class Pacman {
-  constructor(scaledTileSize, mazeArray, characterUtil) {
+  constructor(scaledTileSize, mazeArray, characterUtil, animationTargetId = 'pacman', arrowTargetId = 'pacman-arrow') {
     this.scaledTileSize = scaledTileSize;
     this.mazeArray = mazeArray;
     this.characterUtil = characterUtil;
-    this.animationTarget = document.getElementById('pacman');
-    this.pacmanArrow = document.getElementById('pacman-arrow');
+    this.animationTarget = document.getElementById(animationTargetId);
+    this.pacmanArrow = document.getElementById(arrowTargetId);
+    this.remote = false;
 
     this.reset();
   }
@@ -1033,6 +1042,13 @@ class Pacman {
    * @param {number} elapsedMs - The amount of MS that have passed since the last update
    */
   update(elapsedMs) {
+    if (this.remote) {
+      if (this.moving || this.specialAnimation) {
+        this.msSinceLastSprite += elapsedMs;
+      }
+      return;
+    }
+
     this.oldPosition = { ...this.position };
 
     if (this.moving) {
@@ -1470,20 +1486,59 @@ class GameCoordinator {
     this.cutscene = true;
     this.highScore = localStorage.getItem('highScore');
 
+    this.localPlayerSlot = 0;
+    const isMultiplayerActive = window.multiplayer?.playingMultiplayer;
+    if (isMultiplayerActive && window.multiplayer?.playerSlots) {
+      const mappedSlot = window.multiplayer.playerSlots[window.multiplayer.peerId];
+      if (typeof mappedSlot === 'number') {
+        this.localPlayerSlot = mappedSlot;
+      } else {
+        this.localPlayerSlot = window.multiplayer.isHost ? 0 : 1;
+      }
+    } else if (isMultiplayerActive) {
+      this.localPlayerSlot = window.multiplayer.isHost ? 0 : 1;
+    }
+
     if (this.firstGame) {
       setInterval(() => {
         this.collisionDetectionLoop();
       }, 500);
 
-      this.pacman = new Pacman(
-        this.scaledTileSize,
-        this.mazeArray,
-        new CharacterUtil(this.scaledTileSize),
-      );
+      this.players = [];
+      const playerIds = ['pacman', 'pacman-2', 'pacman-3', 'pacman-4'];
+      const arrowIds = ['pacman-arrow', 'pacman-arrow-2', 'pacman-arrow-3', 'pacman-arrow-4'];
+
+      playerIds.forEach((playerId, slot) => {
+        const player = new Pacman(
+          this.scaledTileSize,
+          this.mazeArray,
+          new CharacterUtil(this.scaledTileSize),
+          playerId,
+          arrowIds[slot],
+        );
+        player.remote = true;
+        player.display = false;
+        this.players.push(player);
+      });
+
+      if (!isMultiplayerActive) {
+        this.players = [this.players[0]];
+      }
+
+      this.pacman = this.players[this.localPlayerSlot];
+      this.pacman.remote = false;
+      this.pacman.display = true;
+      if (isMultiplayerActive) {
+        this.players.forEach((player, slot) => {
+          player.display = true;
+          player.remote = slot !== this.localPlayerSlot;
+        });
+      }
+
       this.blinky = new Ghost(
         this.scaledTileSize,
         this.mazeArray,
-        this.pacman,
+        isMultiplayerActive ? this.players : this.pacman,
         'blinky',
         this.level,
         new CharacterUtil(this.scaledTileSize),
@@ -1491,7 +1546,7 @@ class GameCoordinator {
       this.pinky = new Ghost(
         this.scaledTileSize,
         this.mazeArray,
-        this.pacman,
+        isMultiplayerActive ? this.players : this.pacman,
         'pinky',
         this.level,
         new CharacterUtil(this.scaledTileSize),
@@ -1499,7 +1554,7 @@ class GameCoordinator {
       this.inky = new Ghost(
         this.scaledTileSize,
         this.mazeArray,
-        this.pacman,
+        isMultiplayerActive ? this.players : this.pacman,
         'inky',
         this.level,
         new CharacterUtil(this.scaledTileSize),
@@ -1508,7 +1563,7 @@ class GameCoordinator {
       this.clyde = new Ghost(
         this.scaledTileSize,
         this.mazeArray,
-        this.pacman,
+        isMultiplayerActive ? this.players : this.pacman,
         'clyde',
         this.level,
         new CharacterUtil(this.scaledTileSize),
@@ -1524,14 +1579,14 @@ class GameCoordinator {
       );
     }
 
-    this.entityList = [
-      this.pacman,
+    this.entityList = isMultiplayerActive ? [...this.players] : [this.pacman];
+    this.entityList.push(
       this.blinky,
       this.pinky,
       this.inky,
       this.clyde,
       this.fruit,
-    ];
+    );
 
     this.ghosts = [this.blinky, this.pinky, this.inky, this.clyde];
 
@@ -1775,6 +1830,7 @@ class GameCoordinator {
     window.addEventListener('addTimer', this.addTimer.bind(this));
     window.addEventListener('removeTimer', this.removeTimer.bind(this));
     window.addEventListener('releaseGhost', this.releaseGhost.bind(this));
+    window.addEventListener('multiplayer:state', this.handleMultiplayerState.bind(this));
   }
 
   /**
@@ -1824,7 +1880,17 @@ class GameCoordinator {
    */
   changeDirection(direction) {
     if (this.allowKeyPresses && this.gameEngine.running) {
-      this.pacman.changeDirection(direction, this.allowPacmanMovement);
+      const multiplayer = window.multiplayer;
+      if (multiplayer?.playingMultiplayer && !multiplayer.isHost) {
+        multiplayer.sendPlayerInput({
+          slot: this.localPlayerSlot,
+          direction,
+        });
+        this.pacman.pacmanArrow.style.backgroundImage = 'url(app/style/graphics/'
+          + `spriteSheets/characters/pacman/arrow_${direction}.svg)`;
+      } else {
+        this.pacman.changeDirection(direction, this.allowPacmanMovement);
+      }
     }
   }
 
@@ -1851,6 +1917,52 @@ class GameCoordinator {
   handleSwipe(e) {
     const { direction } = e.detail;
     this.changeDirection(direction);
+  }
+
+  /**
+   * Applies the latest multiplayer state update to the local game objects
+   * @param {Event} event
+   */
+  handleMultiplayerState(event) {
+    const { detail } = event;
+    if (!detail || !Array.isArray(detail.playerStates)) return;
+
+    detail.playerStates.forEach((playerState) => {
+      const player = this.players?.[playerState.slot];
+      if (!player) return;
+
+      player.oldPosition = { ...player.position };
+      player.position = { top: playerState.top, left: playerState.left };
+      player.direction = playerState.direction;
+      player.moving = playerState.moving;
+      player.setSpriteSheet(player.direction);
+    });
+
+    if (Array.isArray(detail.ghostStates)) {
+      detail.ghostStates.forEach((ghostState) => {
+        const ghost = this.ghosts.find((g) => g.name === ghostState.name);
+        if (!ghost) return;
+
+        ghost.oldPosition = { ...ghost.position };
+        ghost.position = { top: ghostState.top, left: ghostState.left };
+        ghost.direction = ghostState.direction;
+        ghost.mode = ghostState.mode;
+        ghost.moving = ghostState.moving;
+        ghost.setSpriteSheet(ghost.name, ghost.direction, ghost.mode);
+      });
+    }
+  }
+
+  /**
+   * Applies remote player input for an authoritative multiplayer host
+   * @param {Object} data
+   */
+  applyRemotePlayerInput(data) {
+    if (!data || typeof data.slot !== 'number' || !data.direction) return;
+    const remotePlayer = this.players?.[data.slot];
+    if (!remotePlayer) return;
+
+    remotePlayer.changeDirection(data.direction, true);
   }
 
   /**
@@ -2424,6 +2536,15 @@ class GameEngine {
    * @param {Array} entityList - List of entities to be used throughout the game
    */
   update(elapsedMs, entityList) {
+    if (window.multiplayer?.playingMultiplayer && !window.multiplayer.isHost) {
+      entityList.forEach((entity) => {
+        if (typeof entity.update === 'function' && entity.remote) {
+          entity.update(elapsedMs);
+        }
+      });
+      return;
+    }
+
     entityList.forEach((entity) => {
       if (typeof entity.update === 'function') {
         entity.update(elapsedMs);

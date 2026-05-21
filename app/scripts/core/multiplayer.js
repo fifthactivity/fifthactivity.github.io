@@ -3,6 +3,7 @@
     this.peer = null;
     this.connections = {};
     this.playerNames = {};
+    this.playerSlots = {};
     this.maxPlayers = 4;
     this.roomId = null;
     this.isHost = false;
@@ -148,6 +149,7 @@
     conn.on('close', () => {
       delete this.connections[remoteId];
       delete this.playerNames[remoteId];
+      delete this.playerSlots[remoteId];
       this.updatePlayerList();
       if (this.isHost) this.broadcastPlayerList();
     });
@@ -172,6 +174,7 @@
     } else if (data.type === 'request_introduce') {
       conn.send({ type: 'introduce', id: this.peerId, name: this.playerName || 'Player' });
     } else if (data.type === 'player_list') {
+      this.playerSlots = {};
       if (data.roomId) {
         this.roomId = data.roomId;
         if (this.joinRoomIdDisplay) this.joinRoomIdDisplay.innerText = data.roomId;
@@ -180,6 +183,9 @@
         data.players.forEach((player) => {
           if (player.id && player.name) {
             this.playerNames[player.id] = player.name;
+            if (typeof player.slot === 'number') {
+              this.playerSlots[player.id] = player.slot;
+            }
           }
         });
       }
@@ -187,6 +193,14 @@
       this.showJoinLobby();
     } else if (data.type === 'start_game') {
       window.dispatchEvent(new CustomEvent('multiplayer:start', { detail: {} }));
+    } else if (data.type === 'player_input') {
+      if (this.isHost && window.gameCoordinator) {
+        window.gameCoordinator.applyRemotePlayerInput(data);
+      }
+    } else if (data.type === 'game_state') {
+      if (!this.isHost) {
+        window.dispatchEvent(new CustomEvent('multiplayer:state', { detail: data }));
+      }
     } else if (data.type === 'room_full') {
       alert('Room is full');
     }
@@ -220,8 +234,17 @@
     const payload = {
       type: 'player_list',
       roomId: this.roomId,
-      players: players.map((id) => ({ id, name: this.playerNames[id] || id })),
+      players: players.map((id, slot) => ({
+        id,
+        name: this.playerNames[id] || id,
+        slot,
+      })),
     };
+
+    this.playerSlots = {};
+    payload.players.forEach((player) => {
+      this.playerSlots[player.id] = player.slot;
+    });
 
     Object.values(this.connections).forEach((conn) => {
       if (conn.open) conn.send(payload);
@@ -237,10 +260,7 @@
   broadcastGameState() {
     if (!this.isHost || !this.roomId || !window.gameCoordinator) return;
 
-    const players = [window.gameCoordinator.pacman];
-    if (window.gameCoordinator.remotePacman) {
-      players.push(window.gameCoordinator.remotePacman);
-    }
+    const players = window.gameCoordinator.players || [window.gameCoordinator.pacman];
 
     const playerStates = players.map((player, slot) => ({
       slot,
@@ -280,13 +300,15 @@
   }
 
   startGame() {
-    // For now, emit a start message to connected peers
-    this.broadcast({ type: 'start_game' });
     if (this.isHost) {
+      this.broadcastPlayerList();
+      this.broadcast({ type: 'start_game' });
       this.broadcastGameState();
       this.startGameStateBroadcast();
+    } else {
+      this.broadcast({ type: 'start_game' });
     }
-    // Host can also trigger UI changes; gameCoordinator should listen for this as needed
+
     window.dispatchEvent(new CustomEvent('multiplayer:start', { detail: {} }));
   }
 }

@@ -804,7 +804,13 @@ class Ghost {
    * @param {number} elapsedMs - The amount of MS that have passed since the last update
    */
   update(elapsedMs) {
-    if (this.remote) return;
+    if (this.remote) {
+      this.oldPosition = { ...this.position };
+      if (this.moving) {
+        this.msSinceLastSprite += elapsedMs;
+      }
+      return;
+    }
 
     this.oldPosition = { ...this.position };
 
