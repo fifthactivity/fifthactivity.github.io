@@ -25,10 +25,19 @@ class MultiplayerManager {
     if (this.startButton) this.startButton.addEventListener('click', () => this.startGame());
   }
 
-  createPeer() {
+  generateRoomId(length = 5) {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    let id = '';
+    while (id.length < length) {
+      id += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return id;
+  }
+
+  createPeer(roomId = null) {
     if (this.peer) return this.peer;
 
-    this.peer = new Peer();
+    this.peer = roomId ? new Peer(roomId) : new Peer();
     this.peer.on('open', (id) => {
       this.peerId = id;
       if (this.peerIdDisplay) this.peerIdDisplay.innerText = id;
@@ -55,7 +64,7 @@ class MultiplayerManager {
 
   hostRoom() {
     this.isHost = true;
-    this.createPeer();
+    this.createPeer(this.generateRoomId());
   }
 
   joinRoom(roomId) {
